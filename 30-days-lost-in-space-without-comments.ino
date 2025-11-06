@@ -1,10 +1,14 @@
+#include "Arduino.h"
+
+#define CABIN_LIGHTS_PIN 12
+
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(CABIN_LIGHTS_PIN, OUTPUT);
 }
 
 void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(CABIN_LIGHTS_PIN, HIGH);
   delay(1000);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(1000);
+  digitalWrite(CABIN_LIGHTS_PIN, LOW);
+  delay(100);
 }
