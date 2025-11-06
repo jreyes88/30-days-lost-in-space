@@ -1,39 +1,37 @@
 #include "Arduino.h"
 
-const byte CABIN_LIGHTS_PIN = 10;
-const byte STORAGE_LIGHTS_PIN = 11;
-const byte COCKPIT_LIGHTS_PIN = 12;
+const byte PHOTORESISTOR_PIN = A0;
 
-const byte CABIN_LIGHTS_SWITCH_PIN = 2;
-const byte STORAGE_LIGHTS_SWITCH_PIN = 3;
-const byte COCKPIT_LIGHTS_SWITCH_PIN = 4;
+const unsigned int MIN_DELAY = 50;
+const unsigned int MAX_DELAY = 500;
 
 void setup() {
-  pinMode(CABIN_LIGHTS_PIN, OUTPUT);
-  pinMode(STORAGE_LIGHTS_PIN, OUTPUT);
-  pinMode(COCKPIT_LIGHTS_PIN, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(PHOTORESISTOR_PIN, INPUT);
 
-  pinMode(CABIN_LIGHTS_SWITCH_PIN, INPUT);
-  pinMode(STORAGE_LIGHTS_SWITCH_PIN, INPUT);
-  pinMode(COCKPIT_LIGHTS_SWITCH_PIN, INPUT);
+  Serial.begin(9600);
 }
 
 void loop() {
-  if (digitalRead(CABIN_LIGHTS_SWITCH_PIN) == HIGH) {
-    digitalWrite(CABIN_LIGHTS_PIN, HIGH);
-  } else {
-    digitalWrite(CABIN_LIGHTS_PIN, LOW);
+  unsigned int light_value = analogRead(PHOTORESISTOR_PIN);
+  Serial.print("Light value: ");
+  Serial.print(light_value);
+  static unsigned int darkest_light = light_value;
+  static unsigned int brightest_light = light_value;
+
+  if (light_value < darkest_light) {
+    darkest_light = light_value;
+  }
+  if (light_value > brightest_light) {
+    brightest_light = light_value;
   }
 
-  if (digitalRead(STORAGE_LIGHTS_SWITCH_PIN) == HIGH) {
-    digitalWrite(STORAGE_LIGHTS_PIN, HIGH);
-  } else {
-    digitalWrite(STORAGE_LIGHTS_PIN, LOW);
-  }
+  unsigned int delay_value = map(light_value, darkest_light, brightest_light, MAX_DELAY, MIN_DELAY);
+  Serial.print(", Delay value: ");
+  Serial.println(delay_value);
 
-  if (digitalRead(COCKPIT_LIGHTS_SWITCH_PIN) == HIGH) {
-    digitalWrite(COCKPIT_LIGHTS_PIN, HIGH);
-  } else {
-    digitalWrite(COCKPIT_LIGHTS_PIN, LOW);
-  }
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(delay_value);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(delay_value);
 }
