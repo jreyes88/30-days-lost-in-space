@@ -23,6 +23,8 @@ void setup() {
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(BLUE_PIN, OUTPUT);
 
+  pinMode(PHOTORESISTOR_PIN, INPUT);
+
   Serial.begin(9600);
 }
 

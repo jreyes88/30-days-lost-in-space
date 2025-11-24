@@ -54,6 +54,8 @@ void setup() {
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(BLUE_PIN, OUTPUT);
 
+  pinMode(PHOTORESISTOR_PIN, INPUT);
+
   // Start serial monitor
   Serial.begin(9600);
 }
