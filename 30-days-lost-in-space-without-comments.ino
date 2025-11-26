@@ -1,55 +1,27 @@
 #include "Arduino.h"
+#include <Keypad.h>
 
-const byte PHOTORESISTOR_PIN = A0;
+const byte ROWS = 4;
+const byte COLS = 4;
 
-const byte RED_PIN = 11;
-const byte GREEN_PIN = 10;
-const byte BLUE_PIN = 9;
+const byte ROW_PINS[ROWS] = { 5, 4, 3, 2 };
+const byte COL_PINS[COLS] = { 6, 7, 8, 9 };
 
-const unsigned long BATTERY_CAPACITY = 50000;
+const char BUTTONS[ROWS][COLS] = {
+  { '1', '2', '3', 'A' },  // Row 0
+  { '4', '5', '6', 'B' },  // Row 1
+  { '7', '8', '9', 'C' },  // Row 2
+  { '*', '0', '#', 'D' }   // Row 3
+};
 
-void displayColor(
-  byte red_intensity,
-  byte green_intensity,
-  byte blue_intensity
-) {
-  analogWrite(RED_PIN, red_intensity);
-  analogWrite(GREEN_PIN, green_intensity);
-  analogWrite(BLUE_PIN, blue_intensity);
-}
+Keypad heroKeypad = Keypad(makeKeymap(BUTTONS), ROW_PINS, COL_PINS, ROWS, COLS);
 
 void setup() {
-  pinMode(RED_PIN, OUTPUT);
-  pinMode(GREEN_PIN, OUTPUT);
-  pinMode(BLUE_PIN, OUTPUT);
-
-  pinMode(PHOTORESISTOR_PIN, INPUT);
-
-  Serial.begin(9600);
+  Serial.begin(9600);  // Initialize the serial monitor
 }
 
 void loop() {
-  static unsigned long battery_level = 0;
+  char pressedButton = heroKeypad.waitForKey();
 
-  battery_level += analogRead(PHOTORESISTOR_PIN);
-
-  if (battery_level > BATTERY_CAPACITY) {
-    battery_level = BATTERY_CAPACITY;
-  }
-
-  float percentage = ((float)battery_level / (float)BATTERY_CAPACITY) * 100;
-
-  if (percentage >= 50.0) {
-    displayColor(0, 128, 0);
-  } else if (percentage >= 25.0 && percentage < 50.0) {
-    displayColor(128, 80, 0);
-  } else {
-    displayColor(0, 0, 0);
-    delay(20);
-    displayColor(128, 0, 0);
-  }
-  Serial.print(percentage);
-  Serial.println("%");
-
-  delay(100);
+  Serial.println(pressedButton);
 }

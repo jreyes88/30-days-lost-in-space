@@ -1,12 +1,16 @@
 /*
  * 30 Days - Lost in Space
- * Day 9 - A Better Way to Do Things
+ * Day 11 - Starting your control panel
  *
  * Learn more at https://learn.inventr.io/adventure
  *
- * Now that we know how to measure our battery charging rate and we know how to display
- * multiple colors with the RGB LED, let's combine those two concepts to display different
- * colors as our battery charges to give a good indication of our current battery state.
+ * Today we introduce you to a 4x4 button Keypad.  This keypad is very similar to
+ * what is found on a calculator or even a digital phone.  This keypad uses only 8
+ * pins to encode 16 buttons by dividing the keypad into rows and columns.  When
+ * a button is pressed it can be identified by finding which row pin and which column
+ * pin are pressed.
+ *
+ * We simplify this process by using a library written for decoding similar keypads.
  *
  * Alex Eschenauer
  * David Schmidt
@@ -15,8 +19,12 @@
 
 /*
  * Arduino concepts introduced/documented in this lesson.
- * - float:   Variable type for decimal numbers that include a decimal point
- * - else if: Control structure for making multiple if decisions together
+ * - libraries: Code provided by others that we can use in our sketches
+ * - char type: Represents a single character like 'A', 'd', '4' or '*'.
+ * - arrays:    Variables of the same type arranged as a list where each item
+ *              can be accessed using an index.  Arrays can be one dimensional
+ *              like a list (with one index) or two dimensional like a spreadsheet
+ *              table with rows and columns (using row and column indexes).
  *
  * Parts and electronics concepts introduced in this lesson.
  */
@@ -24,88 +32,91 @@
 // Explicitly include Arduino.h
 #include "Arduino.h"
 
-// Our photoresistor will give us a reading of the current light level on this analog pin
-const byte PHOTORESISTOR_PIN = A0;  // Photoresistor analog pin
+/*
+ * Instead of writing all the code necessary to check all 8 pins and calculate
+ * which button is pressed we will use a "library" that has already been written
+ * for us and simply call functions in that library.
+ *
+ * Please refer to the lesson and lesson videos to load the Keypad library into
+ * your Arduino IDE before you use it for the first time.
+ *
+ * In order to use the Keypad library we include the file "Keypad.h".
+ */
+#include <Keypad.h>
 
-// RGB LED pins
-const byte RED_PIN = 11;    // pin controlling the red leg of our RGB LED
-const byte GREEN_PIN = 10;  // pin ccontrolling the green leg of our RGB LED
-const byte BLUE_PIN = 9;    // pin ccontrolling the blue leg of our RGB LED
-
-const unsigned long BATTERY_CAPACITY = 50000;  // Maximum battery capacity
+// Our keypad has 4 rows, each with 4 columns.
+const byte ROWS = 4;
+const byte COLS = 4;
 
 /*
- * Display a color on our RGB LED by providing an intensity for
- * our red, green and blue LEDs.
+ * A one dimensional array is like a list of similar variables.  We use an "index" number
+ * to access each item.  To access values in an array we use the name of the array followed
+ * immediately by the index in square brackets: name[index].  The index can either be a
+ * constant ("name[3]") or a variable containing a value:
+ *
+ * byte my_index = 3;
+ * name[my_index] = value;
+ *
+ * Indexes start with zero, not one.  Think of the index as a number *added* to the first
+ * location.  So, to access the first item in our array we add 0.  To access the second
+ * item in the array we add 1.
+ *
+ * In our first array below, ROW_PINS[0] is set to 5 and ROW_PINS[2] is 3.
  */
-void displayColor(
-  byte red_intensity,    // red LED intensity (0-255)
-  byte green_intensity,  // green LED intensity (0-255)
-  byte blue_intensity    // blue LED intensity (0-255)
-) {
-  analogWrite(RED_PIN, red_intensity);      // write red LED intensity using PWM
-  analogWrite(GREEN_PIN, green_intensity);  // write green LED intensity using PWM
-  analogWrite(BLUE_PIN, blue_intensity);    // write blue LED intensity using PWM
-}
+
+// These constant arrays contain the pins connected to the keypad's row and column pins.
+const byte ROW_PINS[ROWS] = { 5, 4, 3, 2 };
+const byte COL_PINS[COLS] = { 6, 7, 8, 9 };
+
+/*
+  * Character Type (char)
+  *
+  * In Arduino C++ we have previousluy used strings of characters using double quotes ("my
+  * string").  But for a single character we need to use single quotes to indicate that there
+  * is just ONE character ('A').
+  */
+
+/*
+ * Two dimensional array
+ *
+ * A two dimensional array combines multiple rows of one-dimensional array into a table
+ * using two indexes using square brackets.  To access any item in the array the first
+ * index is added to the row, and then the second index is added to the column.
+ *
+ * In the BUTTONS array below BUTTONS[0][0] is set to the character '1' and BUTTONS[2][3]
+ * is set to the character 'C'.
+ */
+
+// Since the keypad has 4 rows of 4 columns each we use a two dimensional array to
+// configure what character will be returned when each button is pressed.
+const char BUTTONS[ROWS][COLS] = {
+  { '1', '2', '3', 'A' },  // Row 0
+  { '4', '5', '6', 'B' },  // Row 1
+  { '7', '8', '9', 'C' },  // Row 2
+  { '*', '0', '#', 'D' }   // Row 3
+};
+
+/*
+ * Using the Keypad.h Library, we are going to define a custom keypad to return
+ * the characters we wish when each key is pressed.
+ *
+ * To do this, we create a heroKeypad object configured with our BUTTONS array,
+ * the pins used for the rows and columns and lastly how many rows and how many
+ * columns are on our kepad.
+ *
+ * NOTE: this also does the proper pinMode() commands so we don't need them in our setup()
+ */
+Keypad heroKeypad = Keypad(makeKeymap(BUTTONS), ROW_PINS, COL_PINS, ROWS, COLS);
 
 void setup() {
-  // Declare the RGB LED pins as outputs:
-  pinMode(RED_PIN, OUTPUT);
-  pinMode(GREEN_PIN, OUTPUT);
-  pinMode(BLUE_PIN, OUTPUT);
-
-  pinMode(PHOTORESISTOR_PIN, INPUT);
-
-  // Start serial monitor
-  Serial.begin(9600);
+  Serial.begin(9600);  // Initialize the serial monitor
 }
 
 void loop() {
-  // Use static because we need this variable to maintain it's value across
-  // multiple loop() runs.
-  static unsigned long battery_level = 0;  // Current battery charge level (set to 0 first time used)
+  // heroKeypad.waitForKey() will wait here until any button is pressed and
+  // returns the character we defined in our BUTTONS array.
+  char pressedButton = heroKeypad.waitForKey();  // Wait until a button is pressed
 
-  battery_level += analogRead(PHOTORESISTOR_PIN);  // Add current "charge amount" to our battery
-
-  // We can't charge the battery higher than it's capacity, set level as full if it goes over
-  if (battery_level > BATTERY_CAPACITY) {
-    battery_level = BATTERY_CAPACITY;
-  }
-
-  /*
-   * IMPORTANT NOTE:
-   * If you perform an operation using integer arithemetic each value is not
-   * automatically converted to a floating point (decimal) number.
-   *
-   * In the calculation below, if we divide the integer battery value by the
-   * integer battery capacity (battery_level / BATTERY_CAPACITY) then the result
-   * would ALWAYS be 0, even if that 0 gets converted afterwards to a float (0.0).
-   *
-   * To avoid this, we use the "(float)" declaration before each of our values to
-   * instruct the compiler to FIRST convert the value to floating point and then
-   * perform the calculation using floating point math.
-   *
-   * If our current_battery_level is less than the battery capacity the initial
-   * calculation gives us a number from 0.0 to 1.0.  We then multiple by 100 to
-   * get a percentage value from 0.0 up to 100.0.
-   */
-
-  // Compute battery charge percentage from our function
-  float percentage = ((float)battery_level / (float)BATTERY_CAPACITY) * 100;
-
-  if (percentage >= 50.0) {     // battery level is OK, display green
-    displayColor(0, 128, 0);  // display green
-  } else if (percentage >= 25.0 && percentage < 50.0) {
-    displayColor(128, 80, 0);  // display yellow-ish/amber for early warning
-  } else {                     // Level must be less than 25%, display "pulsating" red
-    // To pulsate the red light we briefly turn the LED off and then display red, giving it
-    // a pulsating effect.
-    displayColor(0, 0, 0);    // Turn off our LED
-    delay(20);                // ...and delay briefly
-    displayColor(128, 0, 0);  // then display red
-  }
-  Serial.print(percentage);  // Display our floating point percentage (like 12.34) WITHOUT a newline
-  Serial.println("%");       // then display the percent sign ("%") with a newline.
-
-  delay(100);  // Delay 1/10 of a second so displayed values don't scroll too fast
+  // Display the character returned for the button that was pressed.
+  Serial.println(pressedButton);
 }
