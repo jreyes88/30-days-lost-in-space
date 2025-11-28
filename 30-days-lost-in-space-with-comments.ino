@@ -1,14 +1,12 @@
 /*
  * 30 Days - Lost in Space
- * Day 12 - Can you hear us?
+ * Day 13 - HERO Security 101
  *
  * Learn more at https://learn.inventr.io/adventure
  *
- * Today we will use the Keypad from Day 11 to control musical TONES using a
- * small speaker.  To do this we will show how to take the characters returned
- * by the Keypad library and convert them to musical notes played by our speaker.
- * Tones will play until changed or stopped (by pressing the 'D' button at the
- * bottom right of our 4x4 button matrix)
+ * Playing tones was fun, but now it's time to get back to business.  Let's use
+ * the 4x4 button keypad input a Personal Identification Number (PIN) to unlock
+ * access to the lander's control panel.
  *
  * Alex Eschenauer
  * David Schmidt
@@ -17,13 +15,11 @@
 
 /*
  * Arduino concepts introduced/documented in this lesson.
- * - libraries: Code provided by others that we can use in our sketches
- * - char type: Represents a single character like 'A', 'd', '4' or '*'.
- * - arrays:    Variables of the same type arranged as a list where each item
- *              can be accessed using an index.  Arrays can be one dimensional
- *              like a list (with one index) or two dimensional like a spreadsheet
- *              table with rows and columns (using row and column indexes).
- * - for loop:  Used to repeately perform actions.
+ * - return:  Used by functions to return a single value and return immediately
+ *            to the caller of the function.
+ * - boolean type: bool is used for a value that can be "true" or "false"
+ *                 NOTE: when testing values for true/false the value 0 is considered
+ *                       "false" and any non-zero value is considered "true".
  *
  * Parts and electronics concepts introduced in this lesson.
  */
@@ -31,79 +27,107 @@
 // Explicitly include Arduino.h
 #include "Arduino.h"
 
-// Include Keypad library
+// Include Keypad library#include <Keypad.h>
 #include <Keypad.h>
 
+// Our HERO keypad has 4 rows, each with 4 columns.
 const byte ROWS = 4;
 const byte COLS = 4;
 
+const byte PIN_LENGTH = 4;    // PIN code is 4 button presses
+char current_pin[PIN_LENGTH] = { '0', '0', '0', '0' }; // Initial PIN is four zeros.
+
+// Define what characters will be returned by each button
+const char BUTTONS[ROWS][COLS] = {
+  { '1', '2', '3', 'A' },
+  { '4', '5', '6', 'B' },
+  { '7', '8', '9', 'C' },
+  { '*', '0', '#', 'D' }
+};
+
+// Define row and column pins connected to the keypad
 const byte ROW_PINS[ROWS] = { 5, 4, 3, 2 };
 const byte COL_PINS[COLS] = { 6, 7, 8, 9 };
 
-char BUTTONS[ROWS][COLS] = {
-  { '1', '2', '3', 'A' },  // 1st row
-  { '4', '5', '6', 'B' },  // 2nd row
-  { '7', '8', '9', 'C' },  // 3rd row
-  { '*', '0', '#', 'D' }   // 4th row
-};
-
-Keypad myAwesomePad = Keypad(makeKeymap(BUTTONS), ROW_PINS, COL_PINS, ROWS, COLS);
-
-const unsigned int TONES[ROWS][COLS] = {
-  // a frequency tone for each button
-  { 31, 93, 147, 208 },
-  { 247, 311, 370, 440 },
-  { 523, 587, 698, 880 },
-  { 1397, 2637, 3729, 0 }  // Use frequency of 0 for bottom right key to end tone.
-};
+Keypad heroKeypad = Keypad(makeKeymap(BUTTONS), ROW_PINS, COL_PINS, ROWS, COLS);
 
 const byte BUZZER_PIN = 10;  // pin 10 drives the buzzer
 
 void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+
   Serial.begin(9600);  // Begin monitoring via the serial monitor
+  delay(200);          // Delay a brief period to let things settle before displaying prompt.
+  Serial.println("Press * to enter new PIN or # to access the system.");
 }
 
-
 void loop() {
-  char button_character = myAwesomePad.waitForKey();  // Wait for a button to be pressed
+  char button_character = heroKeypad.waitForKey();
 
-  /*
-   * For loops:
-   * for() has three parts.  Each is part is :
-   *              START - operations performed when loop starts
-   *              CONDITION - evaluate this condition as a boolean and stop loop
-   *                          when false
-   *              STEP - operations performed every time for loop ends
-   *
-   * NOTE: you will often see the short variable names "i", "j" and "k" used
-   *       for variables in the for statement.  Those particular letters are used
-   *       mostly for historical reasons going back to the FORTRAN language, but
-   *       the variables in loops tend to be short in order to keep the for command
-   *       readable.  The short names also remind you when used that they change
-   *       each time through the loop.
-   */
-  unsigned int tone_frequency = 0;  // Frequency to use for tone (default to 0, no tone)
-  for (byte i = 0; i < ROWS; i++) {
-    for (byte j = 0; j < COLS; j++) {
-      if (button_character == BUTTONS[i][j]) {  // found it, get the corresponding tone
-        tone_frequency = TONES[i][j];
+  // Serial.println(button_character);
+  tone(BUZZER_PIN, 880, 100);
+
+  if (button_character == '#') {  // button to access system
+    bool access_allowed = validatePIN();
+    if (access_allowed) {
+      Serial.println("Welcome, authorized user. You may now begin using the system.");
+    } else {
+      Serial.println("Access Denied.");
+      Serial.println("\nPress * to enter new PIN or # to access the system.");
+    }
+  }
+
+  if (button_character == '*') {  // button to change PIN
+    bool access_allowed = validatePIN();
+
+    if (access_allowed) {
+      Serial.println("Welcome, authorized user. Please Enter a new PIN: ");
+
+      for (int i = 0; i < PIN_LENGTH; i++) {
+        button_character = heroKeypad.waitForKey();
+        tone(BUZZER_PIN, 880, 100);
+
+        current_pin[i] = button_character;
+        Serial.print("*");
       }
 
-    }  // end j loop
-  }    // end i loop
-
-  Serial.print("Key: ");  //   send the button_character to serial monitor...
-  Serial.print(button_character);
-  Serial.print("   Freq: ");
-  Serial.println(tone_frequency);
-
-  /*
-   * The tone() function plays a tone until stopped.  The code continues to run as the tone plays.
-   */
-  if (tone_frequency > 0) {                // If tone frequency greater than 0...
-    tone(BUZZER_PIN, tone_frequency);  // ...then play the tone at that frequency until stopped
-  } else {
-    Serial.println("Stop tone");
-    noTone(BUZZER_PIN);  // Stop pressed (tone frequency of 0) so stop any tone playing
+      Serial.println();  // add new line after last asterisk so next message is on next line
+      Serial.println("PIN Successfully Changed!");
+    } else {
+      Serial.println("Access Denied. Cannot change PIN without the old or default.");
+      Serial.println("\nPress * to enter new PIN or # to access the system.");
+    }
   }
+}
+
+/*
+ * This function prompts the user to enter a PIN and returns true or false depending
+ * on whether the PIN matches our saved PIN.
+ *
+ * NOTE: this function introduces the concept of a function that returns a single
+ *       value.  First, we must indicate what type of value that will be returned
+ *       in the initial function declaration.  The "bool" at the beginning of
+ *       the declaration indicates that this function will return a "boolean" value
+ *       of either true or false.
+ */
+
+bool validatePIN() {
+  Serial.println("Enter PIN to continue.");
+
+  for (int i = 0; i < PIN_LENGTH; i++) {
+    char button_character = heroKeypad.waitForKey();
+    tone(BUZZER_PIN, 880, 100);
+
+    if (current_pin[i] != button_character) {
+      Serial.println();  // start next message on new line
+      Serial.print("WRONG PIN DIGIT: ");
+      Serial.println(button_character);
+      return false;  // return false and exit function
+    }
+    Serial.print("*");
+  }
+
+  Serial.println();  // add new line after last asterisk so next message is on next line
+  Serial.println("Device Successfully Unlocked!");
+  return true;
 }

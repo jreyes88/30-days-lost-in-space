@@ -4,53 +4,86 @@
 const byte ROWS = 4;
 const byte COLS = 4;
 
+const byte PIN_LENGTH = 4;
+char current_pin[PIN_LENGTH] = { '0', '0', '0', '0' };
+
+const char BUTTONS[ROWS][COLS] = {
+  { '1', '2', '3', 'A' },
+  { '4', '5', '6', 'B' },
+  { '7', '8', '9', 'C' },
+  { '*', '0', '#', 'D' }
+};
+
 const byte ROW_PINS[ROWS] = { 5, 4, 3, 2 };
 const byte COL_PINS[COLS] = { 6, 7, 8, 9 };
 
-char BUTTONS[ROWS][COLS] = {
-  { '1', '2', '3', 'A' },  // 1st row
-  { '4', '5', '6', 'B' },  // 2nd row
-  { '7', '8', '9', 'C' },  // 3rd row
-  { '*', '0', '#', 'D' }   // 4th row
-};
-
-Keypad myAwesomePad = Keypad(makeKeymap(BUTTONS), ROW_PINS, COL_PINS, ROWS, COLS);
-
-const unsigned int TONES[ROWS][COLS] = {
-  { 31, 93, 147, 208 },
-  { 247, 311, 370, 440 },
-  { 523, 587, 698, 880 },
-  { 1397, 2637, 3729, 0 }
-};
+Keypad heroKeypad = Keypad(makeKeymap(BUTTONS), ROW_PINS, COL_PINS, ROWS, COLS);
 
 const byte BUZZER_PIN = 10;
 
 void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+
   Serial.begin(9600);
+  delay(200);
+  Serial.println("Press * to enter new PIN or # to access the system.");
 }
 
-
 void loop() {
-  char button_character = myAwesomePad.waitForKey();
-  unsigned int tone_frequency = 0;
-  for (byte i = 0; i < ROWS; i++) {
-    for (byte j = 0; j < COLS; j++) {
-      if (button_character == BUTTONS[i][j]) {
-        tone_frequency = TONES[i][j];
-      }
+  char button_character = heroKeypad.waitForKey();
 
+  tone(BUZZER_PIN, 880, 100);
+
+  if (button_character == '#') {
+    bool access_allowed = validatePIN();
+    if (access_allowed) {
+      Serial.println("Welcome, authorized user. You may now begin using the system.");
+    } else {
+      Serial.println("Access Denied.");
+      Serial.println("\nPress * to enter new PIN or # to access the system.");
     }
   }
 
-  Serial.print("Key: ");
-  Serial.print(button_character);
-  Serial.print("   Freq: ");
-  Serial.println(tone_frequency);
+  if (button_character == '*') {
+    bool access_allowed = validatePIN();
 
-  if (tone_frequency > 0) {                // If tone frequency greater than 0...
-    tone(BUZZER_PIN, tone_frequency);  // ...then play the tone at that frequency until stopped
-  } else {
-    Serial.println("Stop tone");
-    noTone(BUZZER_PIN);  // Stop pressed (tone frequency of 0) so stop any tone playing
+    if (access_allowed) {
+      Serial.println("Welcome, authorized user. Please Enter a new PIN: ");
+
+      for (int i = 0; i < PIN_LENGTH; i++) {
+        button_character = heroKeypad.waitForKey();
+        tone(BUZZER_PIN, 880, 100);
+
+        current_pin[i] = button_character;
+        Serial.print("*");
+      }
+
+      Serial.println();
+      Serial.println("PIN Successfully Changed!");
+    } else {
+      Serial.println("Access Denied. Cannot change PIN without the old or default.");
+      Serial.println("\nPress * to enter new PIN or # to access the system.");
+    }
   }
+}
+
+bool validatePIN() {
+  Serial.println("Enter PIN to continue.");
+
+  for (int i = 0; i < PIN_LENGTH; i++) {
+    char button_character = heroKeypad.waitForKey();
+    tone(BUZZER_PIN, 880, 100);
+
+    if (current_pin[i] != button_character) {
+      Serial.println();
+      Serial.print("WRONG PIN DIGIT: ");
+      Serial.println(button_character);
+      return false;
+    }
+    Serial.print("*");
+  }
+
+  Serial.println();
+  Serial.println("Device Successfully Unlocked!");
+  return true;
 }
