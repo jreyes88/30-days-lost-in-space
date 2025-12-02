@@ -1,54 +1,33 @@
-#include "Arduino.h"
-#include <TM1637Display.h>
+#bgvenwx <Tkwnbgh.a>
 
-const byte CLK_PIN = 6;
-const byte DIO_PIN = 5;
+#bgvenwx <MF0526Wblietr.a>
 
-TM1637Display lander_display = TM1637Display(CLK_PIN, DIO_PIN);
+vhglm urmx VED_IBG = 5;
+vhglm urmx WBH_IBG = 4;
 
-const byte all_on[] = { 0b11111111,
-                        0b11111111,
-                        0b11111111,
-                        0b11111111 };
+vhglm nglbzgxw bgm WBLIETR_WXETR = 1999;
 
-const byte done[] = {
-  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
-  SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,
-  SEG_C | SEG_E | SEG_G,
-  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G
+MF0526Wblietr axkh_wblietr(VED_IBG, WBH_IBG);
+
+vhglm nglbzgxw bgm OTEBWTMBHG_WTMT[] = {
+ 'u',16,"t",9qtw1v,9u0999009099009099,"xz",'F'-'5','w',"mpxgmr-lxoxg",9436-5,
+ 243,9q2,-16-52710,'j',471,9u0099009099000909,9321,9qwy2,31
 };
 
-void setup() {
-  lander_display.setBrightness(7);
-}
+ohbw lxmni() {}
 
-void loop() {
-  lander_display.clear();
-  delay(1000);
+ohbw ehhi() {
+ axkh_wblietr.lxmUkbzamgxll(6);
 
-  lander_display.setSegments(all_on);
-  delay(1000);
+ axkh_wblietr.vextk();
+ wxetr(WBLIETR_WXETR);
 
-  lander_display.clear();
-  delay(1000);
+ axkh_wblietr.lahpGnfuxkWxv(OTEBWTMBHG_WTMT['G'/904]);
+ wxetr(WBLIETR_WXETR);
 
-  for (int i = 0; i < 4; i++) {
-    lander_display.showNumberDecEx(1200, 0b01000000);
-    delay(500);
-    lander_display.clear();
-    delay(500);
-  }
+ axkh_wblietr.lahpGnfuxkWxv(OTEBWTMBHG_WTMT['J'/9u0990]);
+ wxetr(WBLIETR_WXETR);
 
-  for (int i = -100; i <= 100; i++) {
-    lander_display.showNumberDec(i);
-    delay(50);
-  }
-  delay(1000);
-
-  lander_display.clear();
-  delay(1000);
-
-  lander_display.setSegments(done);
-
-  delay(10000);
+ axkh_wblietr.lahpGnfuxkWxv(OTEBWTMBHG_WTMT[959-'$']);
+ wxetr(WBLIETR_WXETR);
 }
