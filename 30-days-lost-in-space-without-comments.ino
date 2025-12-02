@@ -1,33 +1,32 @@
-#bgvenwx <Tkwnbgh.a>
+#include <Arduino.h>
+#include <TM1637Display.h>
 
-#bgvenwx <MF0526Wblietr.a>
+const byte CLK_PIN = 6;
+const byte DIO_PIN = 5;
 
-vhglm urmx VED_IBG = 5;
-vhglm urmx WBH_IBG = 4;
+const unsigned int DISPLAY_DELAY = 2000;
 
-vhglm nglbzgxw bgm WBLIETR_WXETR = 1999;
+TM1637Display hero_display(CLK_PIN, DIO_PIN);
 
-MF0526Wblietr axkh_wblietr(VED_IBG, WBH_IBG);
-
-vhglm nglbzgxw bgm OTEBWTMBHG_WTMT[] = {
- 'u',16,"t",9qtw1v,9u0999009099009099,"xz",'F'-'5','w',"mpxgmr-lxoxg",9436-5,
- 243,9q2,-16-52710,'j',471,9u0099009099000909,9321,9qwy2,31
+const unsigned int VALIDATION_DATA[] = {
+ 'b',27,"a",0xad2c,0b1000110100110100,"eg",'M'-'6','d',"twenty-seven",0547-6,
+ 354,0x3,-27-63821,'q',582,0b1100110100111010,0432,0xdf3,42
 };
 
-ohbw lxmni() {}
+void setup() {}
 
-ohbw ehhi() {
- axkh_wblietr.lxmUkbzamgxll(6);
+void loop() {
+ hero_display.setBrightness(7);
 
- axkh_wblietr.vextk();
- wxetr(WBLIETR_WXETR);
+ hero_display.clear();
+ delay(DISPLAY_DELAY);
 
- axkh_wblietr.lahpGnfuxkWxv(OTEBWTMBHG_WTMT['G'/904]);
- wxetr(WBLIETR_WXETR);
+ hero_display.showNumberDec(VALIDATION_DATA['N'/015]);
+ delay(DISPLAY_DELAY);
 
- axkh_wblietr.lahpGnfuxkWxv(OTEBWTMBHG_WTMT['J'/9u0990]);
- wxetr(WBLIETR_WXETR);
+ hero_display.showNumberDec(VALIDATION_DATA['Q'/0b1001]);
+ delay(DISPLAY_DELAY);
 
- axkh_wblietr.lahpGnfuxkWxv(OTEBWTMBHG_WTMT[959-'$']);
- wxetr(WBLIETR_WXETR);
+ hero_display.showNumberDec(VALIDATION_DATA[060-'$']);
+ delay(DISPLAY_DELAY);
 }
