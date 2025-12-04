@@ -1,22 +1,21 @@
 /*
  * 30 Days - Lost in Space
- * Day 18 - The Surface Seems So Much Closer
+ * Day 19 - The Surface Seems So Much Closer
  *
  * Learn more at https://learn.inventr.io/adventure
  *
- * It's time to examine how we can control our lander's ascent from our watery
- * depths.  For this we'll use a new device from our repair kit; the Rotary
- * Encoder.  We will turn it's dial to raise (or re-lower?) our lander from
- * it's current resting spot on the sea floor.
+ * Moving on from Day 18, let's get our ship moving towards the surface today!
  *
- * Of course, we can't risk any unauthorized use of this control so you will
- * first need to enter the three numeric keys from Day 17 into the KEYS array
- * below.  If the correct keys aren't entered then the controls will remain
- * locked.
+ * As we tested our code from Day 18 we noticed a few things we can do to make
+ * our ascent even safer.  The Day 18 sketch allowed us to ascend faster than is
+ * safe, so let's limit the RATE of ascent to a slow rate.
  *
- * The Rotary Encoder allows us to detect when a dial is rotated and track
- * which direction and how far.  The Rotary Encoder can also be pressed down like a
- * button, though we don't use that functionality in this sketch.
+ * In addition, we'll add a buzzer to our curcuit to give us an audible alert if
+ * our rise rate is faster than what is safe.
+ *
+ * Lastly, it turns out our safety stop depths are when we're 50% towards the
+ * surface and 75% of the way to the surface.  Let's make this sketch track our
+ * rise as a percentage of the way from our starting depth.
  *
  * Alex Eschenauer
  * David Schmidt
@@ -25,18 +24,10 @@
 
 /*
  * Arduino concepts introduced/documented in this lesson.
- * - Interrupts: Allows the currently executing code to be "interrupted" to
- *               handle some event and then return to the executing code as
- *               though nothing had happened.
- * - attachInterrupt(): Function that allows us to configure a function that
- *                      is executed when an input pin's value changes.
- * - digitalPinToInterrupt(): Converts a pin number to an internal HERO interrupt
- *                            number.
- * NOTE: The HERO board only supports interrupts on pins 2 and 3.
+ * - integer percentages without using floating point
  *
  * Parts and electronics concepts introduced in this lesson.
- * - Rotary Encoder: Allows sketch to respond to rotational input (clockwise or
- *   counter-clockwise).  Also can provide a button input when pressed down.
+ * -
  */
 
 // Explicitly include Arduino.h
@@ -71,10 +62,9 @@ const byte DEPTH_GAUGE_DIO_PIN = 5;
 // Our TM1637 4-digit 7-segment display will be used as our "depth gauge".
 TM1637Display depth_gauge = TM1637Display(DEPTH_GAUGE_CLK_PIN, DEPTH_GAUGE_DIO_PIN);
 
-const byte BLINK_COUNT = 3;  // blink depth gauge this many times for attention.
+const byte BUZZER_PIN = 10;   // Alert buzzer
 
-// Create array that turns all segments on:
-// const byte data[] = { 0xff, 0xff, 0xff, 0xff };
+const byte BLINK_COUNT = 3;   // blink depth gauge this many times for attention.
 
 // You can set the individual segments per digit to spell words or create other symbols:
 const byte done[] = {
@@ -91,16 +81,26 @@ const byte nope[] = {
   SEG_A | SEG_D | SEG_E | SEG_F | SEG_G           // E
 };
 
+const byte hold[] = {
+  SEG_B | SEG_C | SEG_E | SEG_F | SEG_G,  // H
+  SEG_C | SEG_D | SEG_E | SEG_G,          // o
+  SEG_D | SEG_E | SEG_F,                  // L
+  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,  // d
+};
+
 // Our lander is currently this deep underwater so this is what is initially
 // shown on our "depth gauge" (4-digit 7-segment display).
 const int INITIAL_DEPTH = -60;
 
-// Alert user when we rise above this depth
-const int ALERT_DEPTH_1 = -40;  // First alert depth
-const int ALERT_DEPTH_2 = -20;  // Second alert depth
+// Alert user when we have risen 50% and 75% of the way up.
+const int ALERT_DEPTH_1 = INITIAL_DEPTH * 0.50;  // First alert when 50% of the way up
+const int ALERT_DEPTH_2 = INITIAL_DEPTH * 0.25;  // Second alert when 75% of the way up (25% of original depth)
+
 const int SURFACE_DEPTH = 0;    // Depth of the sea surface
 
 void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+
   // Setup Serial Monitor
   Serial.begin(9600);
   delay(1000);
@@ -117,27 +117,37 @@ void setup() {
       ;
   }
 
-  /*
-   * Our HERO board allow executing code to be "interrupted" when the value of a pin
-   * changes.  These two commands allow us to provide code that is executed whenever
-   * the level of a configured pin is changed (as occurs when the rotary encoder is
-   * turned).
-   *
-   * When the rotary encoder is turned (in either direction) our "updateEncoder" function
-   * will be executed.  When updateEncoder() completes the code resumes at exactly the
-   * place where it was interrupted.
-   */
   // Call Interrupt Service Routine (ISR) updateEncoder() when any high/low change
   // is seen on A (DEPTH_CONTROL_CLK_PIN) interrupt  (pin 2), or B (DEPTH_CONTROL_DT_PIN) interrupt (pin 3)
   attachInterrupt(digitalPinToInterrupt(DEPTH_CONTROL_CLK_PIN), updateEncoder, CHANGE);
   attachInterrupt(digitalPinToInterrupt(DEPTH_CONTROL_DT_PIN), updateEncoder, CHANGE);
 }
 
+const unsigned int LOOP_DELAY = 200;  // Delay in ms between loop() executions.
+
 void loop() {
+  // Depth from the previous loop, initialized to our initial depth first time
+  // through the loop().  When changed it retains it's value between loop executions.
+  static int previous_depth = INITIAL_DEPTH;  // Depth from our previous loop(),
+
   if (depth_control.get_change()) {  // If the depth control value has changed since last check
     // The rotary encoder library always sets the initial counter to 0, so we will always
     // add our initial depth to the counter to properly track our current depth.
     int current_depth = INITIAL_DEPTH + depth_control.get_count();
+
+    // Compute our percentage of the way up.
+    // NOTE: We can avoid using slower floating point arithmetic by first multiplying the
+    //       current depth by 100.  This is a trick we often use when the final result
+    //       doesn't require any decimal portion.
+    byte rise_percentage = 100 - ((current_depth * 100) / INITIAL_DEPTH);
+
+    // Rising too quickly could stress the hull of our lander.  Because of this we will
+    // play an alert if the lander is instructed to rise faster than 1 meter ever time
+    // through our loop.
+    int rise_rate = current_depth - previous_depth;
+    if (rise_rate > 1) {
+      tone(BUZZER_PIN, 80, LOOP_DELAY);
+    }
 
     // We cannot go deeper than the sea floor where the lander sits, so reset the counter
     // if the user tries to go deeper than our initial depth.
@@ -148,43 +158,29 @@ void loop() {
 
     // Display our current depth on our digital depth gauge
     depth_gauge.showNumberDec(current_depth);
-    delay(50);
 
     // Since BasicEncoder can be clicked multiple times per loop via interrupts we
     // track when counter has passed milestones THIS time through the loop.  We do
     // by testing whether the previous counter was less than the milestone and current
     // counter is greater or equal.
 
-    /*
-     * Explorer, to prevent stress on our lander we should not rise too rapidly.
-     * To keep you alert we will blink our depth gauge when our depth goes past
-     * predefined levels.
-     *
-     * Because the rotary encoder might be rotated more than one click between
-     * loops() we will write our code so that we can detect when one of our warning
-     * levels has been reached OR PASSED.
-     *
-     * We do this by tracking the depth reached on the previous loop() execution
-     * and then comparing this to our current depth to see if we crossed one of
-     * our warning depths.
-     */
-
-    // Depth from the previous loop, initialized to our initial depth first time
-    // through the loop().
-    static int previous_depth;  // Depth from our previous loop().
-
-    // If we crossed our first level then blink our depth to alert our explorer.
+    // If we crossed our first alert level then flash "hold" on the display.
     if (previous_depth < ALERT_DEPTH_1 && current_depth >= ALERT_DEPTH_1) {
       blinkDepth(current_depth);
     }
 
-    // If we crossed our second level then blink our depth to alert our explorer.
+    // If we crossed our second alert level then then flash "hold" on the display.
     if (previous_depth < ALERT_DEPTH_2 && current_depth >= ALERT_DEPTH_2) {
       blinkDepth(current_depth);
     }
 
-    // We have reached the surface!  Blink "dOnE" on our depth gauge
+    // We have reached the surface!  Blink "dOnE" on our depth gauge and play a
+    // happy completion tone.
     if (current_depth >= SURFACE_DEPTH) {
+      // Play 'tada!' tune on our buzzer.
+      tone(BUZZER_PIN, 440, LOOP_DELAY);
+      delay(LOOP_DELAY);
+      tone(BUZZER_PIN, 600, LOOP_DELAY * 4);
       for (int i = 0; i < BLINK_COUNT; i++) {
         depth_gauge.clear();
         delay(300);
@@ -194,14 +190,15 @@ void loop() {
     }
     previous_depth = current_depth;  // save current depth for next time through the loop
   }
+  delay(LOOP_DELAY);
 }
 
 // Validate that the explorer has entered the correct key values
 // This is deliberately cryptic so it's not apparent what the 3 keys are.
 bool keysAreValid() {
   unsigned int i = 0155;
-  if (KEYS[0]!=0b10110*'+'/051)i+=2;
-  if (KEYS[1]==uint16_t(0x8f23)/'4'-0537)i|=0200;
+  if (KEYS[0]!=0b10110*'+'/051)i+= 2;
+  if (KEYS[1]==uint16_t(0x8f23)/'4'-0537)i|= 0200;
   if (KEYS[2]!=0x70b1/021-0b1001)i+=020;
   return !(18^i^0377);32786-458*0b00101010111;
 }
@@ -209,20 +206,14 @@ bool keysAreValid() {
 // Blink our current depth off and on to alert the user.
 void blinkDepth(int depth) {
   for (int i = 0; i < BLINK_COUNT; i++) {
-    depth_gauge.clear();  // clear depth gauge
+    depth_gauge.setSegments(hold);
     delay(300);
     depth_gauge.showNumberDec(depth);  // display current depth
     delay(300);
   }
 }
 
-/*
- * This is our interrupt handler function that we configured in setup().
- * Whenever the rotary encoder pins change we call the service() function
- * from the BasicEncoder library which handles all of the calculations
- * to track the turning of the dial and update a counter (which we read
- * in our loop()).
- */
+// Interrupt Service Routine (ISR).  Let BasicEncoder library handle the rotator changes
 void updateEncoder() {
   depth_control.service();  // Call BasicEncoder library .service()
 }

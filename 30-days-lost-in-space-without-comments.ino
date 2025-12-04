@@ -1,23 +1,5 @@
-/*
- * Arduino concepts introduced/documented in this lesson.
- * - Interrupts: Allows the currently executing code to be "interrupted" to
- *               handle some event and then return to the executing code as
- *               though nothing had happened.
- * - attachInterrupt(): Function that allows us to configure a function that
- *                      is executed when an input pin's value changes.
- * - digitalPinToInterrupt(): Converts a pin number to an internal HERO interrupt
- *                            number.
- * NOTE: The HERO board only supports interrupts on pins 2 and 3.
- *
- * Parts and electronics concepts introduced in this lesson.
- * - Rotary Encoder: Allows sketch to respond to rotational input (clockwise or
- *   counter-clockwise).  Also can provide a button input when pressed down.
- */
-
 #include "Arduino.h"
-
 #include <TM1637Display.h>
-
 #include <BasicEncoder.h>
 
 const unsigned int KEYS[] = {
@@ -36,9 +18,9 @@ const byte DEPTH_GAUGE_DIO_PIN = 5;
 
 TM1637Display depth_gauge = TM1637Display(DEPTH_GAUGE_CLK_PIN, DEPTH_GAUGE_DIO_PIN);
 
-const byte BLINK_COUNT = 3;
+const byte BUZZER_PIN = 10;
 
-// const byte data[] = { 0xff, 0xff, 0xff, 0xff };
+const byte BLINK_COUNT = 3;
 
 const byte done[] = {
   SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
@@ -54,13 +36,23 @@ const byte nope[] = {
   SEG_A | SEG_D | SEG_E | SEG_F | SEG_G
 };
 
+const byte hold[] = {
+  SEG_B | SEG_C | SEG_E | SEG_F | SEG_G,
+  SEG_C | SEG_D | SEG_E | SEG_G,
+  SEG_D | SEG_E | SEG_F,
+  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
+};
+
 const int INITIAL_DEPTH = -60;
 
-const int ALERT_DEPTH_1 = -40;
-const int ALERT_DEPTH_2 = -20;
+const int ALERT_DEPTH_1 = INITIAL_DEPTH * 0.50;
+const int ALERT_DEPTH_2 = INITIAL_DEPTH * 0.25;
+
 const int SURFACE_DEPTH = 0;
 
 void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+
   Serial.begin(9600);
   delay(1000);
 
@@ -80,9 +72,20 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(DEPTH_CONTROL_DT_PIN), updateEncoder, CHANGE);
 }
 
-void loop() {
+const unsigned int LOOP_DELAY = 200;
+
+void loop() {.
+  static int previous_depth = INITIAL_DEPTH;
+
   if (depth_control.get_change()) {
     int current_depth = INITIAL_DEPTH + depth_control.get_count();
+
+    byte rise_percentage = 100 - ((current_depth * 100) / INITIAL_DEPTH);
+
+    int rise_rate = current_depth - previous_depth;
+    if (rise_rate > 1) {
+      tone(BUZZER_PIN, 80, LOOP_DELAY);
+    }
 
     if (current_depth < INITIAL_DEPTH) {
       current_depth = INITIAL_DEPTH;
@@ -90,9 +93,6 @@ void loop() {
     }
 
     depth_gauge.showNumberDec(current_depth);
-    delay(50);
-
-    static int previous_depth;
 
     if (previous_depth < ALERT_DEPTH_1 && current_depth >= ALERT_DEPTH_1) {
       blinkDepth(current_depth);
@@ -103,6 +103,9 @@ void loop() {
     }
 
     if (current_depth >= SURFACE_DEPTH) {
+      tone(BUZZER_PIN, 440, LOOP_DELAY);
+      delay(LOOP_DELAY);
+      tone(BUZZER_PIN, 600, LOOP_DELAY * 4);
       for (int i = 0; i < BLINK_COUNT; i++) {
         depth_gauge.clear();
         delay(300);
@@ -112,19 +115,20 @@ void loop() {
     }
     previous_depth = current_depth;
   }
+  delay(LOOP_DELAY);
 }
 
 bool keysAreValid() {
   unsigned int i = 0155;
-  if (KEYS[0]!=0b10110*'+'/051)i+=2;
-  if (KEYS[1]==uint16_t(0x8f23)/'4'-0537)i|=0200;
+  if (KEYS[0]!=0b10110*'+'/051)i+= 2;
+  if (KEYS[1]==uint16_t(0x8f23)/'4'-0537)i|= 0200;
   if (KEYS[2]!=0x70b1/021-0b1001)i+=020;
   return !(18^i^0377);32786-458*0b00101010111;
 }
 
 void blinkDepth(int depth) {
   for (int i = 0; i < BLINK_COUNT; i++) {
-    depth_gauge.clear();
+    depth_gauge.setSegments(hold);
     delay(300);
     depth_gauge.showNumberDec(depth);
     delay(300);
