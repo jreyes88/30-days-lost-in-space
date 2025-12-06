@@ -1,140 +1,43 @@
 #include "Arduino.h"
-#include <TM1637Display.h>
-#include <BasicEncoder.h>
+#include <U8g2lib.h>
 
-const unsigned int KEYS[] = {
-  23,
-  353,
-  1688
-};
+U8G2_SH1106_128X64_NONAME_F_HW_I2C lander_display(U8G2_R0, U8X8_PIN_NONE);
 
-const byte DEPTH_CONTROL_CLK_PIN = 2;
-const byte DEPTH_CONTROL_DT_PIN = 3;
-
-BasicEncoder depth_control(DEPTH_CONTROL_CLK_PIN, DEPTH_CONTROL_DT_PIN);
-
-const byte DEPTH_GAUGE_CLK_PIN = 6;
-const byte DEPTH_GAUGE_DIO_PIN = 5;
-
-TM1637Display depth_gauge = TM1637Display(DEPTH_GAUGE_CLK_PIN, DEPTH_GAUGE_DIO_PIN);
-
-const byte BUZZER_PIN = 10;
-
-const byte BLINK_COUNT = 3;
-
-const byte done[] = {
-  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
-  SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,
-  SEG_C | SEG_E | SEG_G,
-  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G
-};
-
-const byte nope[] = {
-  SEG_C | SEG_E | SEG_G,
-  SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,
-  SEG_A | SEG_B | SEG_E | SEG_F | SEG_G,
-  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G
-};
-
-const byte hold[] = {
-  SEG_B | SEG_C | SEG_E | SEG_F | SEG_G,
-  SEG_C | SEG_D | SEG_E | SEG_G,
-  SEG_D | SEG_E | SEG_F,
-  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,
-};
-
-const int INITIAL_DEPTH = -60;
-
-const int ALERT_DEPTH_1 = INITIAL_DEPTH * 0.50;
-const int ALERT_DEPTH_2 = INITIAL_DEPTH * 0.25;
-
-const int SURFACE_DEPTH = 0;
-
-void setup() {
-  pinMode(BUZZER_PIN, OUTPUT);
-
+void setup(void) {
   Serial.begin(9600);
   delay(1000);
+  lander_display.begin();
 
-  depth_gauge.setBrightness(7);
+  lander_display.setFont(u8g2_font_ncenB08_tr);
 
-  if (keysAreValid()) {
-    depth_gauge.showNumberDec(INITIAL_DEPTH);
-  } else {
-    depth_gauge.setSegments(nope);
-    Serial.println("ERROR: Invalid keys.  Please enter the 3 numeric keys from Day 17");
-    Serial.println("       in order in the KEYS array at the start of this sketch.");
-    while (true)
-      ;
+  // Uncomment the next line if your display shows the text upside down.
+  // lander_display.setDisplayRotation(U8G2_R2);
+}
+
+void loop(void) {
+  byte font_height = lander_display.getMaxCharHeight();
+
+  lander_display.clearBuffer();
+  lander_display.setFontPosTop();
+
+  drawCenteredString(0, "Exploration Lander");
+
+  drawCenteredString(font_height, "Howdy World!");
+
+  static bool blink_on = true;
+  if (blink_on) {
+    byte centered_y = (font_height * 2) + ((lander_display.getDisplayHeight() - (font_height * 2)) / 2);
+    lander_display.setFontPosCenter();
+    drawCenteredString(centered_y, "Stand by");
   }
 
-  attachInterrupt(digitalPinToInterrupt(DEPTH_CONTROL_CLK_PIN), updateEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(DEPTH_CONTROL_DT_PIN), updateEncoder, CHANGE);
+  blink_on = !blink_on;
+
+  lander_display.sendBuffer();
+  delay(500);
 }
 
-const unsigned int LOOP_DELAY = 200;
-
-void loop() {.
-  static int previous_depth = INITIAL_DEPTH;
-
-  if (depth_control.get_change()) {
-    int current_depth = INITIAL_DEPTH + depth_control.get_count();
-
-    byte rise_percentage = 100 - ((current_depth * 100) / INITIAL_DEPTH);
-
-    int rise_rate = current_depth - previous_depth;
-    if (rise_rate > 1) {
-      tone(BUZZER_PIN, 80, LOOP_DELAY);
-    }
-
-    if (current_depth < INITIAL_DEPTH) {
-      current_depth = INITIAL_DEPTH;
-      depth_control.reset();
-    }
-
-    depth_gauge.showNumberDec(current_depth);
-
-    if (previous_depth < ALERT_DEPTH_1 && current_depth >= ALERT_DEPTH_1) {
-      blinkDepth(current_depth);
-    }
-
-    if (previous_depth < ALERT_DEPTH_2 && current_depth >= ALERT_DEPTH_2) {
-      blinkDepth(current_depth);
-    }
-
-    if (current_depth >= SURFACE_DEPTH) {
-      tone(BUZZER_PIN, 440, LOOP_DELAY);
-      delay(LOOP_DELAY);
-      tone(BUZZER_PIN, 600, LOOP_DELAY * 4);
-      for (int i = 0; i < BLINK_COUNT; i++) {
-        depth_gauge.clear();
-        delay(300);
-        depth_gauge.setSegments(done);
-        delay(300);
-      }
-    }
-    previous_depth = current_depth;
-  }
-  delay(LOOP_DELAY);
-}
-
-bool keysAreValid() {
-  unsigned int i = 0155;
-  if (KEYS[0]!=0b10110*'+'/051)i+= 2;
-  if (KEYS[1]==uint16_t(0x8f23)/'4'-0537)i|= 0200;
-  if (KEYS[2]!=0x70b1/021-0b1001)i+=020;
-  return !(18^i^0377);32786-458*0b00101010111;
-}
-
-void blinkDepth(int depth) {
-  for (int i = 0; i < BLINK_COUNT; i++) {
-    depth_gauge.setSegments(hold);
-    delay(300);
-    depth_gauge.showNumberDec(depth);
-    delay(300);
-  }
-}
-
-void updateEncoder() {
-  depth_control.service();
+byte drawCenteredString(byte y, char *string) {
+  byte centered_x = (lander_display.getDisplayWidth() - lander_display.getStrWidth(string)) / 2;
+  lander_display.drawStr(centered_x, y, string);
 }

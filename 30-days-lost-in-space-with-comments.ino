@@ -1,21 +1,25 @@
 /*
  * 30 Days - Lost in Space
- * Day 19 - The Surface Seems So Much Closer
+ * Day 21 - Howdy New World!
+ *
+ * For safe liftoff we're going to need to see and react to more information than
+ * can be displayed on our 4 digit display or with LEDs.  Luckily our repair kit
+ * contains just the thing, a small monochrome Organic LED display.
+ *
+ * This display has 8,128 tiny LEDs arranged in 64 rows of 128 pixels each.  Now, as
+ * I'm sure you've noticed, we do NOT have 8,128 pins on our HERO board, but never
+ * fear Explorer, people back in the 2020's were pretty clever and came up with a
+ * solution.
+ *
+ * Instead of having one pin for every LED, The HERO will use two pins to send and
+ * receive messages with our OLED display and will instruct the display which pixels
+ * to light up using a special "language" (or "protocol") named I2C ("eye-squared-see").
+ *
+ * The HERO board uses pins A5 and A4 for I2C communications so we will wire those two
+ * pins to our display along with power and ground, giving us a four wire connection
+ * for displaying messages or pictures on our new display.
  *
  * Learn more at https://learn.inventr.io/adventure
- *
- * Moving on from Day 18, let's get our ship moving towards the surface today!
- *
- * As we tested our code from Day 18 we noticed a few things we can do to make
- * our ascent even safer.  The Day 18 sketch allowed us to ascend faster than is
- * safe, so let's limit the RATE of ascent to a slow rate.
- *
- * In addition, we'll add a buzzer to our curcuit to give us an audible alert if
- * our rise rate is faster than what is safe.
- *
- * Lastly, it turns out our safety stop depths are when we're 50% towards the
- * surface and 75% of the way to the surface.  Let's make this sketch track our
- * rise as a percentage of the way from our starting depth.
  *
  * Alex Eschenauer
  * David Schmidt
@@ -24,196 +28,124 @@
 
 /*
  * Arduino concepts introduced/documented in this lesson.
- * - integer percentages without using floating point
+ * - I2C communications.
+ * - Computer character fonts
+ * - U8g2 graphics library for monochrome displays
+ * - Logical Not operator ('!')
+ * - clearBuffer()/sendBuffer() method for OLED display updates
  *
  * Parts and electronics concepts introduced in this lesson.
- * -
+ * - SH1106 monochrome 128x64 pixel OLED display.
+ * - HERO I2C pins (A5 and A4)
  */
 
 // Explicitly include Arduino.h
 #include "Arduino.h"
 
-// Include TM1637 library file
-#include <TM1637Display.h>
+/*
+ * Refer to the Day 21 lesson for instructions on how to install the U8g2
+ * library into the Arduino IDE.  We will use this library to display messages
+ * on our OLED display.
+ *
+ * Extensive documentation for this library can be found at https://github.com/olikraus/u8g2
+ * for those wanting to dive deeper, but we will explain all of the functions
+ * used in these lessons.
+ */
+#include <U8g2lib.h>  // Include file for the U8g2 library.
 
-// Include BasicEncoder library file
-#include <BasicEncoder.h>
+/*
+ * The U8g2 library supports many different types of display.  It does this by
+ * having a different "constructor" for each.  A constructor is used to create
+ * the "handle" that we use to access the libray code.  In this case, our handle
+ * will be named "lander_display".
+ *
+ * The documentation for this library lists all of the displays supported along
+ * with the corresponding constructors and options.  This constructor is for our
+ * SH1106, 128x64 pixel generic display.  The "_F_" indicates that we will use
+ * a full-sized graphics buffer and the clearBuffer()/sendBuffer() methods to
+ * update the entire display at once. The "HW_I2C" indicates that we will be using
+ * I2C communications with this display.
+ */
+U8G2_SH1106_128X64_NONAME_F_HW_I2C lander_display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
 
-// Controls will be locked unless the correct keys from Day 17 are added here.
-const unsigned int KEYS[] = {
-  23,  // Replace '0' with first key from Day 17
-  353,  // Replace '0' with second key from Day 17
-  1688   // Replace '0' with third key from Day 17
-};
-
-// The Rotary Encoder will be used to control our lander's depth underwater using
-// interrupts (explained below).  Since the HERO board only supports interrupts on
-// pins 2 and 3, we MUST use those pins for rotary encoder inputs.
-const byte DEPTH_CONTROL_CLK_PIN = 2;  // HERO interrupt pin connected to encoder CLK input
-const byte DEPTH_CONTROL_DT_PIN = 3;   // HERO interrupt pin connected to encoder DT input
-
-// Create BasicEncoder instance for our depth control (which initializes counter to 0)
-BasicEncoder depth_control(DEPTH_CONTROL_CLK_PIN, DEPTH_CONTROL_DT_PIN);
-
-// Define the display connection pins:
-const byte DEPTH_GAUGE_CLK_PIN = 6;
-const byte DEPTH_GAUGE_DIO_PIN = 5;
-
-// Our TM1637 4-digit 7-segment display will be used as our "depth gauge".
-TM1637Display depth_gauge = TM1637Display(DEPTH_GAUGE_CLK_PIN, DEPTH_GAUGE_DIO_PIN);
-
-const byte BUZZER_PIN = 10;   // Alert buzzer
-
-const byte BLINK_COUNT = 3;   // blink depth gauge this many times for attention.
-
-// You can set the individual segments per digit to spell words or create other symbols:
-const byte done[] = {
-  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,          // d
-  SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,  // O
-  SEG_C | SEG_E | SEG_G,                          // n
-  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G           // E
-};
-
-const byte nope[] = {
-  SEG_C | SEG_E | SEG_G,                          // n
-  SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,  // O
-  SEG_A | SEG_B | SEG_E | SEG_F | SEG_G,          // P
-  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G           // E
-};
-
-const byte hold[] = {
-  SEG_B | SEG_C | SEG_E | SEG_F | SEG_G,  // H
-  SEG_C | SEG_D | SEG_E | SEG_G,          // o
-  SEG_D | SEG_E | SEG_F,                  // L
-  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,  // d
-};
-
-// Our lander is currently this deep underwater so this is what is initially
-// shown on our "depth gauge" (4-digit 7-segment display).
-const int INITIAL_DEPTH = -60;
-
-// Alert user when we have risen 50% and 75% of the way up.
-const int ALERT_DEPTH_1 = INITIAL_DEPTH * 0.50;  // First alert when 50% of the way up
-const int ALERT_DEPTH_2 = INITIAL_DEPTH * 0.25;  // Second alert when 75% of the way up (25% of original depth)
-
-const int SURFACE_DEPTH = 0;    // Depth of the sea surface
-
-void setup() {
-  pinMode(BUZZER_PIN, OUTPUT);
-
-  // Setup Serial Monitor
+void setup(void) {
   Serial.begin(9600);
   delay(1000);
+  lander_display.begin();  // Initialize our display
 
-  depth_gauge.setBrightness(7);  // Set depth gauge brightness to max (values 0-7)
+  // Select a font to use for character display
+  // The library supports hundreds of different fonts which can be found at
+  // https://github.com/olikraus/u8g2/wiki/fntlistall
+  lander_display.setFont(u8g2_font_ncenB08_tr);  // choose a suitable font
 
-  if (keysAreValid()) {
-    depth_gauge.showNumberDec(INITIAL_DEPTH);  // Display our initial depth on our depth gauge.
-  } else {
-    depth_gauge.setSegments(nope);  // Display "nOPE" on display to show key error
-    Serial.println("ERROR: Invalid keys.  Please enter the 3 numeric keys from Day 17");
-    Serial.println("       in order in the KEYS array at the start of this sketch.");
-    while (true)
-      ;
+  // Uncomment the next line if your display shows the text upside down.
+  // lander_display.setDisplayRotation(U8G2_R2);
+}
+
+void loop(void) {
+  // Save the number of vertical pixels required for the tallest character
+  // in the current font.  This is used later to properly position text on
+  // our display.
+  byte font_height = lander_display.getMaxCharHeight();
+
+  lander_display.clearBuffer();  // clear the internal memory
+
+  /*
+   * Even though we will only be displaying text in this lesson, our display is a
+   * graphics display.  Text can be displayed at ANY point on the display so the
+   * library has a setCursor() function to locate the first character to be displayed.
+   *
+   * By default, the cursor position is set to the bit at the lower-left of the
+   * first character, but here we set this to be the UPPER-left of the first
+   * character which makes it easier to position our first line of text on the top
+   * of our display.
+   */
+  lander_display.setFontPosTop();
+
+  // Title line for our display
+  drawCenteredString(0, "Exploration Lander");
+
+  // Display our "Howdy World!" message on line 2 (moving down "font_height" bits)
+  drawCenteredString(font_height, "Howdy World!");
+
+  /*
+   * We will blink a message centered in the remainder of the display.  However, with
+   * this display we cannot clear just part of the display.  The entire display is copied
+   * over from the buffer every time we call sendBuffer().  So, the easiest way to cause
+   * some text to blink is to simply add it to the display every other time through our
+   * loop() and set the delay at the end of the loop to the on/off time.
+   *
+   * To do this we will set a static variable (which keeps it's value between loop() executions)
+   * and only write this message when the variable is true.  Then, at the end of the loop we
+   * toggle the variable to the opposite value.
+   */
+  static bool blink_on = true;
+  if (blink_on) {
+    /*
+    * Now let's center our starting message in the remaining space.  To do this we'll take the
+    * height of our display, subtract the height of our title lines and divide by two.  We'll then
+    * instruct the library to center the text vertically from our starting Y position.
+    */
+    byte centered_y = (font_height * 2) + ((lander_display.getDisplayHeight() - (font_height * 2)) / 2);
+
+    // This statement instructs the graphics library that the Y coordinate used to position
+    // the text will be halfway between the top and bottom of the text.
+    lander_display.setFontPosCenter();  // Draw text with centered Y coordinate
+    drawCenteredString(centered_y, "Stand by");
   }
+  // A boolean value can be changed between it's two states by setting it to the opposite
+  // state using the "logical not".  Not true = false.  Not false = true.
+  // This would be read as "blink on equals not blink on".
+  blink_on = !blink_on;   // toggle value of blink_on between true and false
 
-  // Call Interrupt Service Routine (ISR) updateEncoder() when any high/low change
-  // is seen on A (DEPTH_CONTROL_CLK_PIN) interrupt  (pin 2), or B (DEPTH_CONTROL_DT_PIN) interrupt (pin 3)
-  attachInterrupt(digitalPinToInterrupt(DEPTH_CONTROL_CLK_PIN), updateEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(DEPTH_CONTROL_DT_PIN), updateEncoder, CHANGE);
+  // Nothing is displayed on our display until the buffer is sent to the display, below.
+  lander_display.sendBuffer();  // transfer internal memory to the display
+  delay(500);   // Delay for blink effect
 }
 
-const unsigned int LOOP_DELAY = 200;  // Delay in ms between loop() executions.
-
-void loop() {
-  // Depth from the previous loop, initialized to our initial depth first time
-  // through the loop().  When changed it retains it's value between loop executions.
-  static int previous_depth = INITIAL_DEPTH;  // Depth from our previous loop(),
-
-  if (depth_control.get_change()) {  // If the depth control value has changed since last check
-    // The rotary encoder library always sets the initial counter to 0, so we will always
-    // add our initial depth to the counter to properly track our current depth.
-    int current_depth = INITIAL_DEPTH + depth_control.get_count();
-
-    // Compute our percentage of the way up.
-    // NOTE: We can avoid using slower floating point arithmetic by first multiplying the
-    //       current depth by 100.  This is a trick we often use when the final result
-    //       doesn't require any decimal portion.
-    byte rise_percentage = 100 - ((current_depth * 100) / INITIAL_DEPTH);
-
-    // Rising too quickly could stress the hull of our lander.  Because of this we will
-    // play an alert if the lander is instructed to rise faster than 1 meter ever time
-    // through our loop.
-    int rise_rate = current_depth - previous_depth;
-    if (rise_rate > 1) {
-      tone(BUZZER_PIN, 80, LOOP_DELAY);
-    }
-
-    // We cannot go deeper than the sea floor where the lander sits, so reset the counter
-    // if the user tries to go deeper than our initial depth.
-    if (current_depth < INITIAL_DEPTH) {
-      current_depth = INITIAL_DEPTH;
-      depth_control.reset();
-    }
-
-    // Display our current depth on our digital depth gauge
-    depth_gauge.showNumberDec(current_depth);
-
-    // Since BasicEncoder can be clicked multiple times per loop via interrupts we
-    // track when counter has passed milestones THIS time through the loop.  We do
-    // by testing whether the previous counter was less than the milestone and current
-    // counter is greater or equal.
-
-    // If we crossed our first alert level then flash "hold" on the display.
-    if (previous_depth < ALERT_DEPTH_1 && current_depth >= ALERT_DEPTH_1) {
-      blinkDepth(current_depth);
-    }
-
-    // If we crossed our second alert level then then flash "hold" on the display.
-    if (previous_depth < ALERT_DEPTH_2 && current_depth >= ALERT_DEPTH_2) {
-      blinkDepth(current_depth);
-    }
-
-    // We have reached the surface!  Blink "dOnE" on our depth gauge and play a
-    // happy completion tone.
-    if (current_depth >= SURFACE_DEPTH) {
-      // Play 'tada!' tune on our buzzer.
-      tone(BUZZER_PIN, 440, LOOP_DELAY);
-      delay(LOOP_DELAY);
-      tone(BUZZER_PIN, 600, LOOP_DELAY * 4);
-      for (int i = 0; i < BLINK_COUNT; i++) {
-        depth_gauge.clear();
-        delay(300);
-        depth_gauge.setSegments(done);  // Display "dOnE"
-        delay(300);
-      }
-    }
-    previous_depth = current_depth;  // save current depth for next time through the loop
-  }
-  delay(LOOP_DELAY);
-}
-
-// Validate that the explorer has entered the correct key values
-// This is deliberately cryptic so it's not apparent what the 3 keys are.
-bool keysAreValid() {
-  unsigned int i = 0155;
-  if (KEYS[0]!=0b10110*'+'/051)i+= 2;
-  if (KEYS[1]==uint16_t(0x8f23)/'4'-0537)i|= 0200;
-  if (KEYS[2]!=0x70b1/021-0b1001)i+=020;
-  return !(18^i^0377);32786-458*0b00101010111;
-}
-
-// Blink our current depth off and on to alert the user.
-void blinkDepth(int depth) {
-  for (int i = 0; i < BLINK_COUNT; i++) {
-    depth_gauge.setSegments(hold);
-    delay(300);
-    depth_gauge.showNumberDec(depth);  // display current depth
-    delay(300);
-  }
-}
-
-// Interrupt Service Routine (ISR).  Let BasicEncoder library handle the rotator changes
-void updateEncoder() {
-  depth_control.service();  // Call BasicEncoder library .service()
+// Use the .drawStr() method to draw the current string centered in
+// the current display.
+byte drawCenteredString(byte y, char *string) {
+  byte centered_x = (lander_display.getDisplayWidth() - lander_display.getStrWidth(string)) / 2;
+  lander_display.drawStr(centered_x, y, string);
 }
